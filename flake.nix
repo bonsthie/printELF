@@ -1,9 +1,6 @@
 {
 	inputs = {
 		nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-		pogit = {
-			inputs.nixpkgs.follows = "nixpkgs";
-		};
 	};
 
 	outputs = { nixpkgs, ... }: 
