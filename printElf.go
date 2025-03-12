@@ -61,6 +61,7 @@ func getSymbolName(offset uint32, strtab []byte) string {
 	return string(strtab[offset : offset+uint32(end)])
 }
 
+// you could use binary.Read but this is really from scratch
 func getElfHeader(file *os.File) (*ELFHdr, error) {
 
 	headerSize := int(unsafe.Sizeof(ELFHdr{}))
