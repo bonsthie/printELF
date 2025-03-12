@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -45,6 +46,19 @@ type ELFSym struct {
 	st_shndx uint16 // Section index the symbol is in
 	st_value uint64 // Symbol value (e.g., address)
 	st_size  uint64 // Size of the symbol
+}
+
+func getSymbolName(offset uint32, strtab []byte) string {
+	if offset >= uint32(len(strtab)) {
+		return "<corrupt>"
+	}
+
+	end := bytes.IndexByte(strtab[offset:], 0)
+	if end == -1 {
+		return "<corrupt>"
+	}
+
+	return string(strtab[offset : offset+uint32(end)])
 }
 
 func getElfHeader(file *os.File) (*ELFHdr, error) {
@@ -113,12 +127,7 @@ func getSectionHeaderByName(file *os.File, header *ELFHdr, shstrtab []byte, name
 			return nil, err
 		}
 		section := (*ELFShdr)(unsafe.Pointer(&buffer[0]))
-		sectionName := string(shstrtab[section.sh_name:])
-		end := 0
-		for end < len(sectionName) && sectionName[end] != 0 {
-			end++
-		}
-		sectionNameStr := string(sectionName[:end])
+		sectionNameStr := getSymbolName(section.sh_name, shstrtab)
 		fmt.Printf("sectionName: %v\n", sectionNameStr)
 
 		if sectionNameStr == name {
@@ -130,7 +139,6 @@ func getSectionHeaderByName(file *os.File, header *ELFHdr, shstrtab []byte, name
 }
 
 func readELFSection(file *os.File, section *ELFShdr) ([]byte, error) {
-	// Seek to section offset
 	_, err := file.Seek(int64(section.sh_offset), io.SeekStart)
 	if err != nil {
 		return nil, err
@@ -157,25 +165,19 @@ func listSymbols(file *os.File, symtab, strtab *ELFShdr) error {
 		return err
 	}
 
-	nbSym := symtab.sh_size / uint64(unsafe.Sizeof(ELFSym{}))
+	SymSize := uint64(unsafe.Sizeof(ELFSym{}))
+	nbSym := symtab.sh_size / SymSize
 
 	fmt.Println("Symbol Table Entries:")
 
 	for i := uint64(0); i < nbSym; i++ {
-		sym := (*ELFSym)(unsafe.Pointer(&symtabData[i*uint64(unsafe.Sizeof(ELFSym{}))]))
+		sym := (*ELFSym)(unsafe.Pointer(&symtabData[i*SymSize]))
 
-		// Retrieve symbol name from .strtab
 		symNameOffset := sym.st_name
 		symName := ""
 		if symNameOffset < uint32(len(strtabData)) {
-			nameBytes := strtabData[symNameOffset:]
-			end := 0
-			for end < len(nameBytes) && nameBytes[end] != 0 {
-				end++
-			}
-			symName = string(nameBytes[:end])
+			symName = getSymbolName(symNameOffset, strtabData)
 		}
-
 		fmt.Printf("%016x %s\n", sym.st_value, symName)
 	}
 
